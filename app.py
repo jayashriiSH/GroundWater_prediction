@@ -1,24 +1,53 @@
 import streamlit as st
-import requests
 import pandas as pd
+import numpy as np
+import joblib
 import matplotlib.pyplot as plt
 
-API = "http://127.0.0.1:5000"
+# ======================
+# CONFIG
+# ======================
+st.set_page_config(page_title="Groundwater Dashboard", layout="wide")
 
-st.set_page_config(page_title="GroundWater  Dashboard", layout="wide")
-st.title(" Groundwater Dashboard")
+# ======================
+# LOAD MODEL
+# ======================
+@st.cache_resource
+def load_model():
+    return joblib.load("groundwater_forecast.py")
 
-# =========================
-# ZONE STATUS ROW
-# =========================
+model = load_model()
+
+zone_map = {
+    "North": 0,
+    "Central": 1,
+    "South": 2,
+    "West": 3
+}
+
+# ======================
+# PREDICTION FUNCTION
+# ======================
+def predict_groundwater(zone, month, year):
+    zone_id = zone_map[zone]
+    X = np.array([[zone_id, month, year]])
+    return round(float(model.predict(X)[0]), 2)
+
+# ======================
+# UI
+# ======================
+st.title("🌊 Chennai Groundwater Dashboard")
+
+zones = list(zone_map.keys())
+
+# ======================
+# ZONE STATUS
+# ======================
 st.subheader("Zone Status Overview")
-
-zones = ["North", "Central", "South", "West"]
 cols = st.columns(4)
 
 for i, zone in enumerate(zones):
-    r = requests.post(f"{API}/predict", json={"zone": zone, "month": 1, "year": 2026})
-    level = round(r.json()["groundwater_level"], 2)
+    level = predict_groundwater(zone, 1, 2026)
 
     if level < 2.5:
         badge = "🔴 HIGH"
@@ -29,38 +58,37 @@ for i, zone in enumerate(zones):
 
     cols[i].metric(zone, f"{level} m", badge)
 
-# =========================
-# FORECAST SECTION
-# =========================
+# ======================
+# FORECAST
+# ======================
 st.subheader("12-Month Forecast")
 
-zone = st.selectbox("Select Zone", zones, index=1)
-year = st.selectbox("Select Forecast Year", list(range(2025, 2031)), index=1)
+zone = st.selectbox("Select Zone", zones)
+year = st.selectbox("Select Year", list(range(2025, 2031)))
 
 levels = []
 for m in range(1, 13):
-    r = requests.post(f"{API}/predict", json={"zone": zone, "month": m, "year": year})
-    levels.append(r.json()["groundwater_level"])
+    levels.append(predict_groundwater(zone, m, year))
 
 months = pd.date_range("2025-01-01", periods=12, freq="M").strftime("%b")
 
-fig, ax = plt.subplots(figsize=(8,3))
+fig, ax = plt.subplots(figsize=(8, 3))
 ax.plot(months, levels, marker="o")
 ax.set_ylabel("Groundwater Level (m)")
-ax.set_title(f"{zone} Forecast ({year})")
+ax.set_title(f"{zone} Forecast {year}")
 st.pyplot(fig)
 
-# =========================
-# MANUAL PREDICTION PANEL
-# =========================
+# ======================
+# MANUAL PREDICTION
+# ======================
 st.subheader("Manual Prediction")
 
-col1, col2, col3, col4 = st.columns(4)
-zone2 = col1.selectbox("Zone", zones)
-month2 = col2.selectbox("Month", list(range(1,13)))
-year2 = col3.selectbox("Year", list(range(2025, 2035)))
+c1, c2, c3, c4 = st.columns(4)
 
-if col4.button("Predict"):
-    r = requests.post(f"{API}/predict", json={"zone": zone2, "month": month2, "year": year2})
-    p = round(r.json()["groundwater_level"], 2)
-    st.success(f"{zone2} {month2}/{year2} → {p} m")
+zone2 = c1.selectbox("Zone", zones)
+month2 = c2.selectbox("Month", range(1, 13))
+year2 = c3.selectbox("Year", range(2025, 2035))
+
+if c4.button("Predict"):
+    value = predict_groundwater(zone2, month2, year2)
+    st.success(f"Predicted groundwater level: {value} m")
