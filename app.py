@@ -14,7 +14,7 @@ st.set_page_config(page_title="Groundwater Dashboard", layout="wide")
 # ======================
 @st.cache_resource
 def load_model():
-    return joblib.load("groundwater_forecast.py")
+    return joblib.load("groundwater_model.pkl")
 
 model = load_model()
 
